@@ -6,9 +6,9 @@ export default async function handler(req, res) {
   const sector = (req.query?.sector || "offshore").toLowerCase();
 
   const FEEDS = {
-    offshore: "https://www.upstreamonline.com/rss",
-    wind: "https://www.rechargenews.com/rss",
-    smr: "https://world-nuclear-news.org/rss.aspx"
+  offshore: "https://feeds.feedburner.com/rigzone",
+  wind: "https://www.rechargenews.com/rss",
+  smr: "https://world-nuclear-news.org/rss.aspx"
   };
 
   const feedUrl = FEEDS[sector];

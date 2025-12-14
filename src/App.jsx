@@ -1,132 +1,58 @@
-import { useMemo, useState } from "react";
-import HeaderBar from "./components/HeaderBar";
-import KpiGrid from "./components/KpiGrid";
-import NewsGrid from "./components/NewsGrid";
+import Parser from "rss-parser";
+import { fetch } from "undici";
 
-/**
- * 2단계 준비용: 아직은 더미 KPI (다음 단계에서 실데이터로 교체)
- */
-const DUMMY_KPI = [
-  { key: "brent", label: "Brent", value: 78.2, unit: "USD/bbl" },
-  { key: "wti", label: "WTI", value: 74.1, unit: "USD/bbl" },
-  { key: "gas", label: "Nat Gas (Henry Hub)", value: 3.15, unit: "USD/MMBtu" },
-  { key: "fx", label: "USD/KRW", value: 1375.0, unit: "KRW" }
-];
+const parser = new Parser({
+  headers: { "User-Agent": "Mozilla/5.0 (EnergyInsightBot/1.0)" },
+  timeout: 10000
+});
 
-/**
- * 2단계 준비용: 아직은 더미 뉴스 (RSS 연동 후 교체)
- * - 핵심: sector 필드를 추가해 "섹터별 요약" 구조로 정리
- */
-const DUMMY_NEWS = [
-  // offshore
-  {
-    id: "o-1",
-    sector: "offshore",
-    title: "Deepwater FEED activity expected in GoM",
-    source: "Upstream",
-    date: "2025-12-13",
-    link: "#"
-  },
-  {
-    id: "o-2",
-    sector: "offshore",
-    title: "FPSO awards accelerate in Brazil",
-    source: "Offshore Engineer",
-    date: "2025-12-12",
-    link: "#"
-  },
+const FEEDS = {
+  offshore: "https://feeds.feedburner.com/rigzone",
+  // wind/smr도 같은 방식으로 계속 사용 가능
+  wind: "https://www.rechargenews.com/rss",
+  smr: "https://world-nuclear-news.org/rss.aspx"
+};
 
-  // wind
-  {
-    id: "w-1",
-    sector: "wind",
-    title: "Offshore wind auction rules revised in Europe",
-    source: "Recharge",
-    date: "2025-12-13",
-    link: "#"
-  },
-  {
-    id: "w-2",
-    sector: "wind",
-    title: "Supply chain pressure eases slightly",
-    source: "Recharge",
-    date: "2025-12-11",
-    link: "#"
-  },
-
-  // smr
-  {
-    id: "s-1",
-    sector: "smr",
-    title: "SMR licensing guidance updated by regulator",
-    source: "World Nuclear News",
-    date: "2025-12-13",
-    link: "#"
-  },
-  {
-    id: "s-2",
-    sector: "smr",
-    title: "Utilities explore SMR deployment models",
-    source: "World Nuclear News",
-    date: "2025-12-10",
-    link: "#"
-  }
-];
-
-export default function App() {
-  // ✅ 메인페이지에서 유지할 상태는 sector 하나만
-  const [sector, setSector] = useState("offshore");
-
-  // ✅ 2단계에서 RSS/API 붙이기 쉽게: 데이터는 state로 관리 (지금은 더미로 초기화)
-  const [kpis] = useState(DUMMY_KPI);
-  const [news] = useState(DUMMY_NEWS);
-
-  /**
-   * 메인 페이지는 "섹터별 최신 요약"이 핵심이므로
-   * - 전체 뉴스에서 섹터별 Top N만 뽑아 보여준다.
-   */
-  const newsBySector = useMemo(() => {
-    const grouped = { offshore: [], wind: [], smr: [] };
-    for (const item of news) {
-      if (grouped[item.sector]) grouped[item.sector].push(item);
-    }
-    // 최신이 위로 오도록 정렬 (date가 YYYY-MM-DD 라는 가정)
-    for (const key of Object.keys(grouped)) {
-      grouped[key] = grouped[key].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 6);
-    }
-    return grouped;
-  }, [news]);
-
-  return (
-    <div style={{ background: "#0b1220", minHeight: "100vh", color: "#e7eefc" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: 20 }}>
-        <HeaderBar sector={sector} onChangeSector={setSector} />
-
-        <KpiGrid items={kpis} />
-
-        {/* ✅ 메인페이지: 섹터별 요약 카드(3개)를 항상 노출 */}
-        <div style={styles.sectionHeader}>
-          <div style={styles.h2}>Latest headlines</div>
-          <div style={styles.h2Sub}>
-            Executive view — drill down pages will come in Step 3
-          </div>
-        </div>
-
-        <NewsGrid
-          activeSector={sector}
-          blocks={[
-            { sector: "offshore", title: "Offshore (Oil & Gas)", items: newsBySector.offshore },
-            { sector: "wind", title: "Offshore Wind", items: newsBySector.wind },
-            { sector: "smr", title: "SMR", items: newsBySector.smr }
-          ]}
-        />
-      </div>
-    </div>
-  );
+// 아주 보수적인 XML 클린업: "명백히 잘못된 &"만 &amp;로 치환
+function fixBadAmpersands(xml) {
+  // 이미 &amp; &lt; &gt; &quot; &apos; 또는 &#123; &#x1A; 같은 엔티티는 건드리지 않음
+  return xml.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, "&amp;");
 }
 
-const styles = {
-  sectionHeader: { marginTop: 18, marginBottom: 10 },
-  h2: { fontSize: 14, fontWeight: 800 },
-  h2Sub: { marginTop: 4, fontSize: 12, opacity: 0.65 }
-};
+export default async function handler(req, res) {
+  const sector = (req.query?.sector || "offshore").toLowerCase();
+  const feedUrl = FEEDS[sector];
+
+  if (!feedUrl) return res.status(400).json({ error: "Invalid sector" });
+
+  try {
+    const r = await fetch(feedUrl);
+    if (!r.ok) {
+      return res.status(502).json({
+        error: "Failed to fetch RSS",
+        detail: `Upstream RSS returned ${r.status}`
+      });
+    }
+
+    const xmlRaw = await r.text();
+    const xmlFixed = fixBadAmpersands(xmlRaw);
+
+    const feed = await parser.parseString(xmlFixed);
+
+    const items = (feed.items || []).slice(0, 10).map((item, idx) => ({
+      id: `${sector}-${idx}-${(item.guid || item.link || "").slice(-8)}`,
+      sector,
+      title: item.title || "(no title)",
+      link: item.link || "#",
+      date: item.isoDate || item.pubDate || "",
+      source: feed.title || "RSS"
+    }));
+
+    return res.status(200).json(items);
+  } catch (e) {
+    return res.status(500).json({
+      error: "Failed to fetch RSS",
+      detail: String(e?.message || e)
+    });
+  }
+}
