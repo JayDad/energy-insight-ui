@@ -1,58 +1,110 @@
-import Parser from "rss-parser";
-import { fetch } from "undici";
+import { useEffect, useMemo, useState } from "react";
+import HeaderBar from "./components/HeaderBar.jsx";
+import KpiGrid from "./components/KpiGrid.jsx";
+import NewsGrid from "./components/NewsGrid.jsx";
+import { fetchNews } from "./services/news.js";
 
-const parser = new Parser({
-  headers: { "User-Agent": "Mozilla/5.0 (EnergyInsightBot/1.0)" },
-  timeout: 10000
-});
+const SECTORS = [
+  { key: "offshore", title: "Offshore (O&G)" },
+  { key: "wind", title: "Offshore Wind" },
+  { key: "smr", title: "SMR" }
+];
 
-const FEEDS = {
-  offshore: "https://feeds.feedburner.com/rigzone",
-  // wind/smr도 같은 방식으로 계속 사용 가능
-  wind: "https://www.rechargenews.com/rss",
-  smr: "https://world-nuclear-news.org/rss.aspx"
-};
+const KPI_ITEMS = [
+  { key: "rigs", label: "Active Rigs", value: "184", unit: "units" },
+  { key: "dayrate", label: "Avg Dayrate", value: "$318K", unit: "/day" },
+  { key: "wind", label: "Wind Capacity", value: "28.4", unit: "GW" },
+  { key: "smr", label: "SMR Projects", value: "14", unit: "in pipeline" }
+];
 
-// 아주 보수적인 XML 클린업: "명백히 잘못된 &"만 &amp;로 치환
-function fixBadAmpersands(xml) {
-  // 이미 &amp; &lt; &gt; &quot; &apos; 또는 &#123; &#x1A; 같은 엔티티는 건드리지 않음
-  return xml.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, "&amp;");
-}
+export default function App() {
+  const [sector, setSector] = useState("offshore");
+  const [newsBySector, setNewsBySector] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-export default async function handler(req, res) {
-  const sector = (req.query?.sector || "offshore").toLowerCase();
-  const feedUrl = FEEDS[sector];
+  useEffect(() => {
+    let active = true;
 
-  if (!feedUrl) return res.status(400).json({ error: "Invalid sector" });
+    async function loadAll() {
+      setLoading(true);
+      setError("");
 
-  try {
-    const r = await fetch(feedUrl);
-    if (!r.ok) {
-      return res.status(502).json({
-        error: "Failed to fetch RSS",
-        detail: `Upstream RSS returned ${r.status}`
-      });
+      try {
+        const results = await Promise.all(
+          SECTORS.map(async (s) => [s.key, await fetchNews(s.key)])
+        );
+
+        if (!active) return;
+
+        const next = {};
+        for (const [key, items] of results) {
+          next[key] = items;
+        }
+
+        setNewsBySector(next);
+      } catch (err) {
+        if (!active) return;
+        setError("Failed to load news.");
+      } finally {
+        if (active) setLoading(false);
+      }
     }
 
-    const xmlRaw = await r.text();
-    const xmlFixed = fixBadAmpersands(xmlRaw);
+    loadAll();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-    const feed = await parser.parseString(xmlFixed);
+  const blocks = useMemo(
+    () =>
+      SECTORS.map((s) => ({
+        sector: s.key,
+        title: s.title,
+        items: newsBySector[s.key] || []
+      })),
+    [newsBySector]
+  );
 
-    const items = (feed.items || []).slice(0, 10).map((item, idx) => ({
-      id: `${sector}-${idx}-${(item.guid || item.link || "").slice(-8)}`,
-      sector,
-      title: item.title || "(no title)",
-      link: item.link || "#",
-      date: item.isoDate || item.pubDate || "",
-      source: feed.title || "RSS"
-    }));
+  return (
+    <div style={styles.page}>
+      <div style={styles.shell}>
+        <HeaderBar sector={sector} onChangeSector={setSector} />
 
-    return res.status(200).json(items);
-  } catch (e) {
-    return res.status(500).json({
-      error: "Failed to fetch RSS",
-      detail: String(e?.message || e)
-    });
-  }
+        {error ? <div style={styles.statusError}>{error}</div> : null}
+        {loading ? <div style={styles.statusInfo}>Loading news...</div> : null}
+
+        <KpiGrid items={KPI_ITEMS} />
+
+        <div style={styles.sectionGap} />
+        <NewsGrid blocks={blocks} activeSector={sector} />
+      </div>
+    </div>
+  );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    padding: 16,
+    color: "#e7eefc",
+    background:
+      "radial-gradient(circle at 20% 20%, rgba(43, 61, 88, 0.55), transparent 45%), radial-gradient(circle at 80% 0%, rgba(12, 33, 61, 0.6), transparent 40%), #0b1220"
+  },
+  shell: {
+    maxWidth: 1100,
+    margin: "0 auto"
+  },
+  statusInfo: {
+    marginTop: 8,
+    fontSize: 12,
+    opacity: 0.75
+  },
+  statusError: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#ffb4b4"
+  },
+  sectionGap: { height: 12 }
+};

@@ -17,17 +17,19 @@ export default function HeaderBar({ sector, onChangeSector }) {
     <header style={styles.wrap}>
       <div>
         <div style={styles.title}>Offshore & Energy Insight</div>
-        <div style={styles.sub}>Oil &amp; Gas • Offshore Wind • SMR</div>
+        <div style={styles.sub}>Oil & Gas / Offshore Wind / SMR</div>
 
-        {/* ✅ 메인페이지는 Sector 탭까지만 */}
         <div style={styles.tabs}>
-          <Tab active={sector === "offshore"} onClick={() => onChangeSector("offshore")}>
-            Offshore (O&amp;G)
+          <Tab active={sector === "offshore"} onClick={() => onChangeSector("offshore")}
+          >
+            Offshore (O&G)
           </Tab>
-          <Tab active={sector === "wind"} onClick={() => onChangeSector("wind")}>
+          <Tab active={sector === "wind"} onClick={() => onChangeSector("wind")}
+          >
             Offshore Wind
           </Tab>
-          <Tab active={sector === "smr"} onClick={() => onChangeSector("smr")}>
+          <Tab active={sector === "smr"} onClick={() => onChangeSector("smr")}
+          >
             SMR
           </Tab>
         </div>

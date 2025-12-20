@@ -1,25 +1,17 @@
 function Card({ children }) {
-  return (
-    <div style={styles.card}>
-      {children}
-    </div>
-  );
+  return <div style={styles.card}>{children}</div>;
 }
 
 function Badge({ active, children }) {
-  return (
-    <span style={active ? styles.badgeActive : styles.badge}>
-      {children}
-    </span>
-  );
+  return <span style={active ? styles.badgeActive : styles.badge}>{children}</span>;
 }
 
 /**
  * props:
  * - blocks: [{ sector, title, items }]
- * - activeSector: HeaderBar에서 선택된 섹터(현재는 "하이라이트" 용)
+ * - activeSector: currently selected sector
  */
-export default function NewsGrid({ blocks, activeSector }) {
+export default function NewsGrid({ blocks = [], activeSector }) {
   return (
     <div style={styles.grid}>
       {blocks.map((b) => (
@@ -44,7 +36,7 @@ export default function NewsGrid({ blocks, activeSector }) {
                   <div style={styles.itemTitle}>{n.title}</div>
                   <div style={styles.itemMeta}>
                     <span style={styles.metaText}>{n.source}</span>
-                    <span style={styles.metaDot}>•</span>
+                    <span style={styles.metaDot}>-</span>
                     <span style={styles.metaText}>{n.date}</span>
                   </div>
                 </a>
@@ -60,7 +52,7 @@ export default function NewsGrid({ blocks, activeSector }) {
               style={styles.linkBtn}
               onClick={() => alert("Step 3: sector detail pages will be added.")}
             >
-              View details →
+              View details ->
             </button>
           </div>
         </Card>
@@ -113,7 +105,14 @@ const styles = {
     background: "rgba(0,0,0,.10)"
   },
   itemTitle: { fontSize: 12, fontWeight: 700, lineHeight: 1.3 },
-  itemMeta: { marginTop: 6, fontSize: 11, opacity: 0.72, display: "flex", gap: 6, alignItems: "center" },
+  itemMeta: {
+    marginTop: 6,
+    fontSize: 11,
+    opacity: 0.72,
+    display: "flex",
+    gap: 6,
+    alignItems: "center"
+  },
   metaText: {},
   metaDot: { opacity: 0.6 },
   empty: { fontSize: 12, opacity: 0.7, padding: 10 },
