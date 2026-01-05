@@ -43,7 +43,7 @@ export default function App() {
         }
 
         setNewsBySector(next);
-      } catch (err) {
+      } catch {
         if (!active) return;
         setError("Failed to load news.");
       } finally {

@@ -52,7 +52,7 @@ export default function NewsGrid({ blocks = [], activeSector }) {
               style={styles.linkBtn}
               onClick={() => alert("Step 3: sector detail pages will be added.")}
             >
-              View details ->
+              View details →
             </button>
           </div>
         </Card>

@@ -1,78 +1,102 @@
-import Parser from "rss-parser";
+/* global process */
 
-const parser = new Parser({
-  timeout: 10000,
-  headers: {
-    // 일부 RSS는 UA 없으면 403/이상 응답을 주기도 해서 넣어둠
-    "User-Agent": "Mozilla/5.0 (EnergyInsightBot/1.0)"
-  }
-});
-
-const FEEDS = {
-  offshore: "https://feeds.feedburner.com/rigzone",
-  wind: "https://www.rechargenews.com/rss",
-  smr: "https://world-nuclear-news.org/rss.aspx"
+const SUPPORTED_SECTORS = {
+  offshore: "offshore oil & gas",
+  wind: "offshore wind",
+  smr: "small modular reactors"
 };
 
-// XML에서 "잘못된 &"만 &amp;로 보정 (이미 정상 엔티티는 건드리지 않음)
-function fixBadAmpersands(xml) {
-  return xml.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, "&amp;");
+const MODEL = "llama-3.1-sonar-small-128k-chat";
+
+function cleanJsonText(raw) {
+  const trimmed = raw.trim();
+
+  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
+    const withoutFence = trimmed.replace(/^```\w*\n?/, "").replace(/```$/, "").trim();
+    return withoutFence;
+  }
+
+  return trimmed;
 }
 
-// 날짜 정리(isoDate/pubDate가 없을 때도 방어)
-function toDateString(item) {
-  return item.isoDate || item.pubDate || item.published || item.date || "";
+function normalizeItems(sector, items) {
+  return (items || []).map((item, idx) => ({
+    id: `${sector}-${idx}-${String(item.link || item.title || idx).slice(-12)}`,
+    sector,
+    title: item.title || "(no title)",
+    link: item.link || "#",
+    date: item.date || item.published || "",
+    source: item.source || "Perplexity"
+  }));
 }
 
 export default async function handler(req, res) {
   const sector = String(req.query?.sector || "offshore").toLowerCase();
-  const feedUrl = FEEDS[sector];
+  const sectorLabel = SUPPORTED_SECTORS[sector];
 
-  if (!feedUrl) {
+  if (!sectorLabel) {
     return res.status(400).json({ error: "Invalid sector" });
   }
 
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({ error: "Missing PERPLEXITY_API_KEY" });
+  }
+
   try {
-    // 1) 원문 RSS(XML) fetch
-    const r = await fetch(feedUrl, {
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
       headers: {
-        "User-Agent": "Mozilla/5.0 (EnergyInsightBot/1.0)",
-        "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8"
-      }
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 800,
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an energy market analyst. Return ONLY compact JSON with an 'items' array. Each item must have title, link (if available), source, and date (ISO or human-readable). Keep items recent (last ~14 days)."
+          },
+          {
+            role: "user",
+            content: `List the latest ${sectorLabel} sector updates with source and date. Provide 6 concise items.`
+          }
+        ],
+        response_format: { type: "json_object" }
+      })
     });
 
-    if (!r.ok) {
+    if (!response.ok) {
       return res.status(502).json({
-        error: "Failed to fetch RSS",
-        detail: `RSS responded ${r.status} ${r.statusText}`
+        error: "Failed to query Perplexity",
+        detail: `${response.status} ${response.statusText}`
       });
     }
 
-    const xmlRaw = await r.text();
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
 
-    // 2) 깨진 엔티티(& 등) 최소 보정
-    const xmlFixed = fixBadAmpersands(xmlRaw);
+    if (!content) {
+      return res.status(502).json({ error: "No content returned from Perplexity" });
+    }
 
-    // 3) 문자열 파싱
-    const feed = await parser.parseString(xmlFixed);
+    let parsed;
 
-    const items = (feed.items || []).slice(0, 10).map((item, idx) => ({
-      id: `${sector}-${idx}-${String(item.guid || item.link || "").slice(-10)}`,
-      sector,
-      title: item.title || "(no title)",
-      link: item.link || "#",
-      date: toDateString(item),
-      source: feed.title || "RSS"
-    }));
+    try {
+      parsed = JSON.parse(cleanJsonText(content));
+    } catch (err) {
+      return res.status(502).json({ error: "Failed to parse Perplexity response", detail: err.message });
+    }
 
-    // (선택) 5분 캐시 힌트: 같은 요청이 자주 오면 RSS 재호출을 줄임
-    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+    const items = normalizeItems(sector, parsed.items || parsed.results || []);
 
+    res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=300");
     return res.status(200).json(items);
   } catch (e) {
-    return res.status(500).json({
-      error: "Failed to fetch RSS",
-      detail: String(e?.message || e)
-    });
+    return res.status(500).json({ error: "Failed to fetch news", detail: String(e?.message || e) });
   }
 }
