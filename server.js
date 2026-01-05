@@ -1,9 +1,11 @@
 import express from "express";
-import handler from "./api/news.js";
+import newsHandler from "./api/news.js";
+import updateNewsHandler from "./api/cron/update-news.js";
 
 const app = express();
 
-app.get("/api/news", (req, res) => handler(req, res));
+app.get("/api/news", (req, res) => newsHandler(req, res));
+app.get("/api/cron/update-news", (req, res) => updateNewsHandler(req, res));
 
 app.listen(3001, () => {
   console.log("API server running on http://localhost:3001");
