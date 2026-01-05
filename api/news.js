@@ -1,5 +1,3 @@
-/* global process */
-
 import { kv } from "@vercel/kv";
 import { SUPPORTED_SECTORS } from "./_lib/news.js";
 

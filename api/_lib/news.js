@@ -1,5 +1,3 @@
-/* global process */
-
 const SUPPORTED_SECTORS = {
   offshore: "offshore oil & gas",
   wind: "offshore wind",
