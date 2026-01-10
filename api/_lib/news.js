@@ -4,7 +4,8 @@ const SUPPORTED_SECTORS = {
   smr: "small modular reactors"
 };
 
-const MODEL = "llama-3.1-sonar-small-128k-chat";
+// Use online model for real-time web search and latest news
+const MODEL = "llama-3.1-sonar-small-128k-online";
 
 function cleanJsonText(raw) {
   const trimmed = String(raw || "").trim();
@@ -48,11 +49,11 @@ async function fetchLatestNews(apiKey, sector) {
         {
           role: "system",
           content:
-            "You are an energy market analyst. Return ONLY compact JSON with an 'items' array. Each item must have title, link (if available), source, and date (ISO or human-readable). Keep items recent (last ~14 days)."
+            "You are an energy market analyst with real-time web access. Search the web for the latest news and return ONLY valid JSON with an 'items' array. Each item must have: title (string), link (actual URL), source (news outlet name), and date (YYYY-MM-DD format). Focus on news from the last 7-14 days from reputable sources like Reuters, Bloomberg, Offshore Engineer, Energy Voice, etc."
         },
         {
           role: "user",
-          content: `List the latest ${sectorLabel} sector updates with source and date. Provide 6 concise items.`
+          content: `Search the web for the latest ${sectorLabel} news and industry updates. Return 6 recent news items with actual links and dates.`
         }
       ],
       response_format: { type: "json_object" }
