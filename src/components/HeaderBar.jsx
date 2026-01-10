@@ -39,7 +39,6 @@ export default function HeaderBar({ sector, onChangeSector }) {
         <div style={styles.meta}>
           Last updated: <span style={{ opacity: 1 }}>{lastUpdated}</span>
         </div>
-        <div style={styles.note}>Step 2 prep: Main dashboard (data wiring next)</div>
       </div>
     </header>
   );

@@ -1,6 +1,6 @@
 /* global process */
 
-import { kv } from "@vercel/kv";
+import { saveNews } from "../_lib/supabase.js";
 import { SUPPORTED_SECTORS, fetchLatestNews } from "../_lib/news.js";
 
 function isAuthorized(req) {
@@ -36,8 +36,12 @@ export default async function handler(req, res) {
 
     try {
       const items = await fetchLatestNews(apiKey, sector);
-      await kv.set(`news:${sector}`, items);
-      results[sector] = items.length;
+      const saveResult = await saveNews(items);
+      results[sector] = {
+        fetched: items.length,
+        saved: saveResult.saved,
+        skipped: saveResult.skipped
+      };
     } catch (err) {
       failures[sector] = String(err?.message || err);
     }

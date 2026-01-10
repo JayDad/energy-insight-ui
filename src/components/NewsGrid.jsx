@@ -45,16 +45,6 @@ export default function NewsGrid({ blocks = [], activeSector }) {
               <div style={styles.empty}>No headlines yet.</div>
             )}
           </div>
-
-          <div style={styles.footer}>
-            <button
-              type="button"
-              style={styles.linkBtn}
-              onClick={() => alert("Step 3: sector detail pages will be added.")}
-            >
-              View details →
-            </button>
-          </div>
         </Card>
       ))}
     </div>
