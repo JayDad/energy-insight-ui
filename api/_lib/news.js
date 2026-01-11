@@ -5,7 +5,7 @@ const SUPPORTED_SECTORS = {
 };
 
 // Use online model for real-time web search and latest news
-const MODEL = "llama-3.1-sonar-small-128k-online";
+const MODEL = "sonar";
 
 function cleanJsonText(raw) {
   const trimmed = String(raw || "").trim();
@@ -49,19 +49,20 @@ async function fetchLatestNews(apiKey, sector) {
         {
           role: "system",
           content:
-            "You are an energy market analyst with real-time web access. Search the web for the latest news and return ONLY valid JSON with an 'items' array. Each item must have: title (string), link (actual URL), source (news outlet name), and date (YYYY-MM-DD format). Focus on news from the last 7-14 days from reputable sources like Reuters, Bloomberg, Offshore Engineer, Energy Voice, etc."
+            "You are an energy market analyst with real-time web access. Search the web for the latest news and return ONLY valid JSON with an 'items' array. Each item must have: title (string), link (actual URL), source (news outlet name), and date (YYYY-MM-DD format). Focus on news from the last 7-14 days from reputable sources like Reuters, Bloomberg, Offshore Engineer, Energy Voice, etc. Return ONLY the JSON object, no markdown or explanation."
         },
         {
           role: "user",
-          content: `Search the web for the latest ${sectorLabel} news and industry updates. Return 6 recent news items with actual links and dates.`
+          content: `Search the web for the latest ${sectorLabel} news and industry updates. Return 6 recent news items with actual links and dates. Response must be valid JSON only.`
         }
-      ],
-      response_format: { type: "json_object" }
+      ]
     })
   });
 
   if (!response.ok) {
-    throw new Error(`Perplexity error ${response.status}`);
+    const errorBody = await response.text();
+    console.error("Perplexity error details:", errorBody);
+    throw new Error(`Perplexity error ${response.status}: ${errorBody}`);
   }
 
   const data = await response.json();

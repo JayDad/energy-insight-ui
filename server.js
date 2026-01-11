@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import newsHandler from "./api/news.js";
 import newsHistoryHandler from "./api/news-history.js";
