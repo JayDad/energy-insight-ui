@@ -1,3 +1,5 @@
+import NewsCard from './NewsCard';
+
 function Card({ children }) {
   return <div style={styles.card}>{children}</div>;
 }
@@ -26,20 +28,7 @@ export default function NewsGrid({ blocks = [], activeSector }) {
           <div style={styles.list}>
             {b.items?.length ? (
               b.items.map((n) => (
-                <a
-                  key={n.id}
-                  href={n.link || "#"}
-                  target={n.link && n.link !== "#" ? "_blank" : undefined}
-                  rel={n.link && n.link !== "#" ? "noreferrer" : undefined}
-                  style={styles.item}
-                >
-                  <div style={styles.itemTitle}>{n.title}</div>
-                  <div style={styles.itemMeta}>
-                    <span style={styles.metaText}>{n.source}</span>
-                    <span style={styles.metaDot}>-</span>
-                    <span style={styles.metaText}>{n.date}</span>
-                  </div>
-                </a>
+                <NewsCard key={n.id} news={n} />
               ))
             ) : (
               <div style={styles.empty}>No headlines yet.</div>
@@ -86,25 +75,6 @@ const styles = {
     background: "rgba(255,255,255,.10)"
   },
   list: { display: "flex", flexDirection: "column", gap: 10 },
-  item: {
-    textDecoration: "none",
-    color: "#e7eefc",
-    padding: 10,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,.10)",
-    background: "rgba(0,0,0,.10)"
-  },
-  itemTitle: { fontSize: 12, fontWeight: 700, lineHeight: 1.3 },
-  itemMeta: {
-    marginTop: 6,
-    fontSize: 11,
-    opacity: 0.72,
-    display: "flex",
-    gap: 6,
-    alignItems: "center"
-  },
-  metaText: {},
-  metaDot: { opacity: 0.6 },
   empty: { fontSize: 12, opacity: 0.7, padding: 10 },
 
   footer: { marginTop: 10, display: "flex", justifyContent: "flex-end" },
