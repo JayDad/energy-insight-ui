@@ -1,33 +1,21 @@
+import { searchNews } from './perplexitySearch.js';
+import { summarizeNewsInKorean } from './perplexitySummarize.js';
+
 const SUPPORTED_SECTORS = {
   offshore: "offshore oil & gas",
   wind: "offshore wind",
   smr: "small modular reactors"
 };
 
-// Use online model for real-time web search and latest news
-const MODEL = "sonar";
-
-function cleanJsonText(raw) {
-  const trimmed = String(raw || "").trim();
-
-  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
-    return trimmed.replace(/^```\w*\n?/, "").replace(/```$/, "").trim();
-  }
-
-  return trimmed;
-}
-
-function normalizeItems(sector, items) {
-  return (items || []).map((item, idx) => ({
-    id: `${sector}-${idx}-${String(item.link || item.title || idx).slice(-12)}`,
-    sector,
-    title: item.title || "(no title)",
-    link: item.link || "#",
-    date: item.date || item.published || "",
-    source: item.source || "Perplexity"
-  }));
-}
-
+/**
+ * Fetch latest news using 2-stage pipeline:
+ * 1. Search API - Get raw news results from trusted sources
+ * 2. Chat API (Sonar Pro) - Generate Korean/English summaries
+ *
+ * @param {string} apiKey - Perplexity API key
+ * @param {string} sector - Sector identifier (offshore, wind, smr)
+ * @returns {Promise<Array>} Array of news items with summaries
+ */
 async function fetchLatestNews(apiKey, sector) {
   const sectorLabel = SUPPORTED_SECTORS[sector];
 
@@ -35,52 +23,77 @@ async function fetchLatestNews(apiKey, sector) {
     throw new Error("Invalid sector");
   }
 
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 800,
-      temperature: 0.3,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an energy market analyst with real-time web access. Search the web for the latest news and return ONLY valid JSON with an 'items' array. Each item must have: title (string), link (actual URL), source (news outlet name), and date (YYYY-MM-DD format). Focus on news from the last 7-14 days from reputable sources like Reuters, Bloomberg, Offshore Engineer, Energy Voice, etc. Return ONLY the JSON object, no markdown or explanation."
-        },
-        {
-          role: "user",
-          content: `Search the web for the latest ${sectorLabel} news and industry updates. Return 6 recent news items with actual links and dates. Response must be valid JSON only.`
+  console.log(`\n=== Fetching news for ${sector} (${sectorLabel}) ===`);
+
+  // Step 1: Search API - Get raw news results
+  console.log(`[${sector}] Step 1/2: Searching for news...`);
+  const searchResults = await searchNews(apiKey, sector, sectorLabel);
+
+  if (!searchResults || searchResults.length === 0) {
+    console.warn(`[${sector}] No search results found`);
+    return [];
+  }
+
+  console.log(`[${sector}] Found ${searchResults.length} news items`);
+
+  // Step 2: Chat API - Generate Korean/English summaries
+  console.log(`[${sector}] Step 2/2: Generating Korean/English summaries...`);
+  const summarizedNews = await summarizeNewsInKorean(
+    apiKey,
+    searchResults,
+    sectorLabel
+  );
+
+  if (!summarizedNews || summarizedNews.length === 0) {
+    console.warn(`[${sector}] No summaries generated, falling back to search results`);
+    // Fallback: Return search results without summaries
+    return searchResults.slice(0, 6).map((item, idx) => ({
+      id: `${sector}-${idx}-${String(item.url || item.title || idx).slice(-12)}`,
+      sector,
+      title: item.title || "(no title)",
+      link: item.url || "#",
+      source: item.source || "Unknown",
+      date: item.published_date || "",
+      summary_ko: null,
+      summary_en: null,
+      citations: []
+    }));
+  }
+
+  // Normalize and enrich items with citations
+  const enrichedNews = summarizedNews.map((item, idx) => {
+    // Find matching search results for citations
+    const citations = searchResults
+      .filter(searchItem => {
+        // Match by URL or title similarity
+        if (item.url && searchItem.url) {
+          return searchItem.url.includes(item.url) || item.url.includes(searchItem.url);
         }
-      ]
-    })
+        return false;
+      })
+      .slice(0, 3) // Max 3 citations per item
+      .map(cite => ({
+        title: cite.source || 'Unknown',
+        url: cite.url,
+        snippet: cite.snippet || ''
+      }));
+
+    return {
+      id: `${sector}-${idx}-${String(item.url || item.title || idx).slice(-12)}`,
+      sector,
+      title: item.title || "(no title)",
+      link: item.url || "#",
+      source: item.source || "Unknown",
+      date: item.date || "",
+      summary_ko: item.summary_ko || null,
+      summary_en: item.summary_en || null,
+      citations: citations.length > 0 ? citations : []
+    };
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error("Perplexity error details:", errorBody);
-    throw new Error(`Perplexity error ${response.status}: ${errorBody}`);
-  }
+  console.log(`[${sector}] ✓ Successfully processed ${enrichedNews.length} news items with summaries\n`);
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error("No content returned from Perplexity");
-  }
-
-  let parsed;
-
-  try {
-    parsed = JSON.parse(cleanJsonText(content));
-  } catch (err) {
-    throw new Error(`Failed to parse Perplexity response: ${err.message}`);
-  }
-
-  return normalizeItems(sector, parsed.items || parsed.results || []);
+  return enrichedNews;
 }
 
 export { SUPPORTED_SECTORS, fetchLatestNews };
