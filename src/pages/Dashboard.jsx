@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import HeaderBar from "../components/HeaderBar.jsx";
+import MarketIndicators from "../components/MarketIndicators.jsx";
 import KpiGrid from "../components/KpiGrid.jsx";
 import NewsGrid from "../components/NewsGrid.jsx";
 import { fetchNews } from "../services/news.js";
@@ -86,9 +87,17 @@ export default function Dashboard() {
         {error ? <div style={styles.statusError}>{error}</div> : null}
         {loading ? <div style={styles.statusInfo}>Loading news...</div> : null}
 
+        {/* Market Indicators - Real-time market data */}
+        <MarketIndicators />
+
+        <div style={styles.sectionGap} />
+
+        {/* KPI Grid - Static KPIs */}
         <KpiGrid items={KPI_ITEMS} />
 
         <div style={styles.sectionGap} />
+
+        {/* News Grid - Sector news */}
         <NewsGrid blocks={blocks} activeSector={sector} />
       </div>
     </div>
