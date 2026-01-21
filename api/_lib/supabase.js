@@ -67,6 +67,7 @@ export async function getHistoricalNews(sector, page = 1, limit = 20) {
 /**
  * Save news items to database
  * Handles duplicates gracefully (upsert)
+ * Now supports Korean/English summaries and citations
  */
 export async function saveNews(newsItems) {
   if (!Array.isArray(newsItems) || newsItems.length === 0) {
@@ -80,7 +81,10 @@ export async function saveNews(newsItems) {
     link: item.link || null,
     content: item.content || null,
     source: item.source,
-    published_date: item.date ? new Date(item.date).toISOString() : null
+    published_date: item.date ? new Date(item.date).toISOString() : null,
+    summary_ko: item.summary_ko || null,
+    summary_en: item.summary_en || null,
+    citations: item.citations && item.citations.length > 0 ? item.citations : null
   }));
 
   // Use upsert to handle duplicates
